@@ -1,0 +1,95 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <ctype.h>
+#include <stdbool.h>
+
+int main() {
+    int pipe1[2]; // Parent writes, Child reads (String transmission)
+    int pipe2[2]; // Child writes, Parent reads (Validation status transmission)
+    pid_t pid;
+
+    // Create both pipes
+    if (pipe(pipe1) == -1 || pipe(pipe2) == -1) {
+        perror("Pipe establishment failed");
+        return 1;
+    }
+
+    pid = fork();
+
+    if (pid < 0) {
+        perror("Fork failed");
+        return 1;
+    }
+
+    if (pid == 0) {
+        // --- CHILD PROCESS ---
+        close(pipe1[1]); // Close write end of 1st pipe
+        close(pipe2[0]); // Close read end of 2nd pipe
+
+        char str[100];
+        // Read string from the 1st pipe
+        read(pipe1[0], str, sizeof(str));
+        close(pipe1[0]);
+
+        int length = strlen(str);
+        bool has_num = false;
+        bool has_special = false;
+        int i;
+
+        // Check criteria
+        for (i = 0; i < length; i++) {
+            if (isdigit(str[i])) {
+                has_num = true;
+            }
+            // Checks if character is not a letter, space, or digit (Special Character)
+            else if (!isalpha(str[i]) && !isspace(str[i])) {
+                has_special = true;
+            }
+        }
+
+        // Validate all three rules: 1. Number, 2. Special Char, 3. Length > 7
+        // Send full status string back to parent
+        if (has_num && has_special && length > 7) {
+            write(pipe2[1], "string is valid", 16);
+        } else {
+            write(pipe2[1], "string is invalid", 18);
+        }
+
+        close(pipe2[1]);
+        exit(0);
+
+    } else {
+        // --- PARENT PROCESS ---
+        close(pipe1[0]); // Close read end of 1st pipe
+        close(pipe2[1]); // Close write end of 2nd pipe
+
+        char input_str[100];
+        printf("Enter a string: ");
+        // Reads input string with spaces securely
+        if (fgets(input_str, sizeof(input_str), stdin) != NULL) {
+            // Remove newline character added by fgets
+            input_str[strcspn(input_str, "\n")] = '\0';
+        }
+
+        // Send string to child process via 1st pipe
+        write(pipe1[1], input_str, strlen(input_str) + 1);
+        close(pipe1[1]);
+
+        char result[30]; // Buffer expanded to safely fit the longer string
+        // Read the validation outcome back from 2nd pipe
+        read(pipe2[0], result, sizeof(result));
+        close(pipe2[0]);
+
+        // Clean up child process
+        wait(NULL);
+
+        // Print final custom status response
+        printf("%s\n", result);
+    }
+
+    return 0;
+}
