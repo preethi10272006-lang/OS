@@ -1,0 +1,75 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <stdbool.h>
+
+// Function to check if a number is a power of 3
+bool isPowerOfThree(int n) {
+    if (n <= 0) return false;
+    while (n % 3 == 0) {
+        n /= 3;
+    }
+    return n == 1;
+}
+
+int main() {
+    int fd[2];
+    pid_t pid;
+
+    // Create the pipe
+    if (pipe(fd) == -1) {
+        perror("Pipe failed");
+        return 1;
+    }
+
+    // Fork the process
+    pid = fork();
+
+    if (pid < 0) {
+        perror("Fork failed");
+        return 1;
+    }
+
+    if (pid == 0) {
+        // --- CHILD PROCESS ---
+        close(fd[0]); // Close unused read end
+
+        printf("C ID: %d\n", getpid());
+
+        int number;
+        printf("Enter a number: ");
+        if (scanf("%d", &number) != 1) {
+            close(fd[1]);
+            exit(1);
+        }
+
+        // Send the number to the parent
+        write(fd[1], &number, sizeof(number));
+        close(fd[1]); // Close write end after sending
+        exit(0);
+    } else {
+        // --- PARENT PROCESS ---
+        close(fd[1]); // Close unused write end
+
+        int received_number;
+        // Read data from pipe
+        read(fd[0], &received_number, sizeof(received_number));
+        close(fd[0]); // Close read end
+
+        // Wait for child process cleanup
+        wait(NULL);
+
+        printf("P ID: %d\n", getpid());
+
+        // Output changes: Just checks power of 3 status directly
+        if (isPowerOfThree(received_number)) {
+            printf("%d is a power of 3\n", received_number);
+        } else {
+            printf("%d is not a power of 3\n", received_number);
+        }
+    }
+
+    return 0;
+}
