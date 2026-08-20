@@ -1,0 +1,86 @@
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+int main()
+{
+   pid_t p2,p3,p4,p5,p6,p7,p8;
+
+   // FIX 1: Added \n so the text prints immediately and does not mix into child outputs
+   printf("pid : %d\n", getpid());
+
+   p2 = fork();
+   if(p2<0)
+   {
+      perror("Fork failed\n");
+   }
+   else if(p2==0)
+   {
+      printf("p2 - > pid: %d, parent: %d\n", getpid(), getppid());
+      p4 = fork();
+      if(p4==0)
+      {
+         printf("p4 -> pid:%d, parent: %d\n", getpid(), getppid());
+         p8=fork();
+         if(p8==0)
+         {
+            printf("p8 - > pid: %d, parent:%d\n", getpid(), getppid());
+         }
+         else
+         {
+            wait(NULL); // Waits for P8 to finish
+         }
+      }
+      else
+      {
+         wait(NULL); // FIX 2: Moved up! Forces P2 to wait for P4 family to finish BEFORE creating P5
+
+         p5=fork();
+         if(p5==0)
+         {
+            printf("p5 -> pid: %d, parent: %d\n", getpid(), getppid());
+         }
+         else
+         {
+            wait(NULL); // Waits for P5 to finish
+         }
+      }
+   }
+   else
+   {
+      wait(NULL); // FIX 3: Moved up! Forces Main Process to wait for P2 family to completely finish before spawning P3
+
+      p3=fork();
+      if(p3<0)
+      {
+         perror("Fork Failed\n");
+      }
+      else if(p3==0)
+      {
+         printf(" p3 -> pid: %d, parent: %d\n", getpid(), getppid());
+         p7=fork();
+         if(p7==0)
+         {
+            printf("p7 -> pid: %d, parent: %d\n", getpid(), getppid());
+         }
+         else
+         {
+            wait(NULL); // Waits for P7 to finish
+            p6=fork();
+            if(p6==0)
+            {
+               printf("p6 -> pid: %d, parent: %d\n", getpid(), getppid());
+            }
+            else
+            {
+               wait(NULL); // Waits for P6 to finish
+            }
+         }
+      }
+      else
+      {
+         wait(NULL); // Main process waits for P3 branch to finish completely
+      }
+   }
+   return 0;
+}
